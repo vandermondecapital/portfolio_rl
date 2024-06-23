@@ -5,11 +5,11 @@ from torch_geometric.data import Data
 from portfolio_simulator import PortfolioSimulator
 import random
 import numpy as np
-min_assets = 5
-max_assets = 25
+min_assets = 4
+max_assets = 4
 class GraphDataCreator:
     @staticmethod
-    def create_graph_data(stock_data, correlations, num_samples=10000):
+    def create_graph_data(stock_data, correlations, num_samples=100):
         mode = 'sharpe'
         nodes = []
         portfolio_metrics = []
@@ -44,15 +44,15 @@ class GraphDataCreator:
                     edge_index.append([sampled_tickers.index(stock1), sampled_tickers.index(stock2)])
                     edge_attr.append(correlations[(stock2, stock1)])
 
-            for i in range(num_assets):
-                for j in range(i + 1, num_assets):
-                    if [i, j] not in edge_index and [j, i] not in edge_index:
-                        edge_index.append([i, j])
-                        edge_index.append([j, i])
-                        edge_attr.append([1.0, 1.0, 1.0])
-                        edge_attr.append([1.0, 1.0, 1.0])
-                edge_index.append([i, i])
-                edge_attr.append([1.0, 1.0, 1.0])
+            # for i in range(num_assets):
+            #     for j in range(i + 1, num_assets):
+            #         if [i, j] not in edge_index and [j, i] not in edge_index:
+            #             edge_index.append([i, j])
+            #             edge_index.append([j, i])
+            #             edge_attr.append([1.0, 1.0, 1.0])
+            #             edge_attr.append([1.0, 1.0, 1.0])
+            #     edge_index.append([i, i])
+            #     edge_attr.append([1.0, 1.0, 1.0])
 
             edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
             edge_attr = torch.tensor(edge_attr, dtype=torch.float)

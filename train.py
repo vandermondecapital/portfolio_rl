@@ -59,35 +59,39 @@ from portfolio_simulator import PortfolioSimulator
 from torch_geometric.data import Data
 
 # Parameters
-min_assets = 5
-max_assets = 25
+min_assets = 4
+max_assets = 4
 mode = 'sharpe'  # Set mode to 'sharpe' or 'correlation'
 update_target_freq = 100  # Frequency of updating the target network
-replay_buffer_capacity = 10000
+replay_buffer_capacity = 1000000
 batch_size = 64
-learning_rate = 0.0001  # Lower learning rate for stability
+learning_rate = 0.001  # Lower learning rate for stability
 from tqdm import tqdm
 # Training loop
-def train_podqn(agent, data_list, portfolio_metrics, epochs=1000):
+def train_podqn(agent, data_list, portfolio_metrics, epochs=100000):
     for epoch in range(epochs):
         total_loss = 0
         valid = 0
-        for i, data in tqdm(enumerate(data_list)):
+        for i, data in enumerate(data_list):
             state = data
             # print(f"State x shape: {state.x.shape}")
             # print(f"State edge_index shape: {state.edge_index.shape}")
             # print(f"State num_assets: {state.num_assets}")
             action = agent.choose_action(state)
             next_state_weights = PortfolioSimulator.adjust_weights(state.x[:, 0].numpy(), action)
-            next_state = Data(x=torch.tensor(np.column_stack((next_state_weights, state.x[:, 1].numpy())), dtype=torch.float), edge_index=state.edge_index, edge_attr=state.edge_attr, num_assets=state.num_assets)
+            if mode == 'sharpe':
+                next_state = Data(x=torch.tensor(np.column_stack((next_state_weights, state.x[:, 1].numpy())), dtype=torch.float), edge_index=state.edge_index, edge_attr=state.edge_attr, num_assets=state.num_assets)
+            else:
+                next_state = Data(x=torch.tensor(next_state_weights).unsqueeze(-1), edge_index=state.edge_index, edge_attr=state.edge_attr, num_assets=state.num_assets)
             # print(f"Next state x shape: {next_state.x.shape}")
-            reward = PortfolioSimulator.calculate_sharpe_ratio(next_state.x[:, 0].numpy(), data.stock_returns.numpy()) if mode == 'sharpe' else PortfolioSimulator.calculate_correlation(next_state.x[:, 0].numpy(), data.stock_returns.numpy())
+            reward = PortfolioSimulator.calculate_sharpe_ratio(next_state.x[:, 0].numpy(), data.stock_returns.numpy()) if mode == 'sharpe' else 1-10*PortfolioSimulator.calculate_portfolio_std(next_state.x[:, 0].numpy(), data.stock_returns.numpy())
             done = False  # Define termination condition if necessary
             done = torch.tensor(done, dtype=torch.float).to(next(agent.model.parameters()).device)
             agent.replay_buffer.push(state, action, reward, next_state, done)
             agent.update_epsilon()
-            agent.train_step(batch_size)
-            if not np.isnan(reward) and reward!='nan':
+            if valid % batch_size == batch_size-1:
+                agent.train_step(batch_size)
+            if not np.isnan(reward) and reward != 'nan':
                 total_loss += reward  # Simplified; adapt based on your loss function
                 valid += 1
 

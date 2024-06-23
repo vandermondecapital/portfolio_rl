@@ -3,8 +3,8 @@ import numpy as np
 from replay_buffer import ReplayBuffer
 from portfolio_simulator import PortfolioSimulator
 from torch_geometric.data import Data
-min_assets = 5
-max_assets = 25
+min_assets = 10
+max_assets = 10
 import torch
 import numpy as np
 from replay_buffer import ReplayBuffer
@@ -20,9 +20,8 @@ import numpy as np
 from replay_buffer import ReplayBuffer
 from portfolio_simulator import PortfolioSimulator
 from torch_geometric.data import Data
-
 class PODQN:
-    def __init__(self, model, target_model, state_dim, action_dim, replay_buffer, lr=0.0001, gamma=0.99, epsilon=1.0, epsilon_decay=0.995, epsilon_min=0.01):
+    def __init__(self, model, target_model, state_dim, action_dim, replay_buffer, lr=0.001, gamma=0.99, epsilon=1.0, epsilon_decay=0.995, epsilon_min=0.01):
         self.model = model
         self.target_model = target_model
         self.state_dim = state_dim
@@ -34,7 +33,7 @@ class PODQN:
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
-        self.loss_fn = torch.nn.MSELoss()
+        self.loss_fn = torch.nn.SmoothL1Loss()
         self.update_target_network()
 
     def update_target_network(self):
@@ -43,7 +42,6 @@ class PODQN:
     def choose_action(self, data):
         num_assets = data.num_assets
         valid_actions = np.arange(2 * num_assets)
-        # print(num_assets)
         
         if np.random.rand() < self.epsilon:
             action = np.random.choice(valid_actions)
@@ -84,24 +82,22 @@ class PODQN:
         q_values = torch.cat([self.model(s) for s in state])
         next_q_values = torch.cat([self.target_model(ns) for ns in next_state])
 
-        # Ensure that the Q-values do not contain NaNs
         if not torch.isnan(q_values).any() and not torch.isnan(next_q_values).any():
-
             # Compute target Q-values
             next_q_values, _ = torch.max(next_q_values, dim=1, keepdim=True)
             target_q_values = reward + (self.gamma * next_q_values * (1 - done))
-
+            
             # Compute the loss
             q_value = q_values.gather(1, action).squeeze(1)
             loss = self.loss_fn(q_value, target_q_values.squeeze(1))
-
-            # Check for NaNs in loss
+            
             if not torch.isnan(loss).any():
-
-                # Optimize the model
                 self.optimizer.zero_grad()
                 loss.backward()
+                for param in self.model.parameters():
+                    if param.grad != None:
+                        param.grad.data.clamp_(-1, 1)
+                
                 self.optimizer.step()
 
-                # Update epsilon
                 self.update_epsilon()
